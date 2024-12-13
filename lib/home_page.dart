@@ -11,6 +11,8 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'pomodoro.dart'; // Import the Pomodoro Timer
+import 'graph.dart';
+import 'todo.dart';
 
 
 Future<String> saveImageToFile(Uint8List imageBytes) async {
@@ -48,7 +50,6 @@ Future<Uint8List?> generateImage(String prompt) async {
 }
 
 
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -78,20 +79,20 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         title: Text(
-          "KADERAi",
+          "KADERassist",
           style: TextStyle(
             fontSize: 25,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
-        backgroundColor: Color(0xFF70BDF2), // light blue matching your image
+        backgroundColor: Color(0xFF70BDF2),
         elevation: 0,
       ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF70BDF2), Color(0xFF0066CC)], // Blue gradient
+            colors: [Color(0xFF70BDF2), Color(0xFF0066CC)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -107,7 +108,7 @@ class _HomePageState extends State<HomePage> {
                 inputOptions: InputOptions(
                   trailing: [
                     IconButton(
-                      onPressed: _sendMediaMessage,
+                      onPressed: () => _sendMediaMessage(context),
                       icon: Icon(Icons.image_rounded, color: Colors.white),
                     ),
                   ],
@@ -119,8 +120,9 @@ class _HomePageState extends State<HomePage> {
                       borderSide: BorderSide.none,
                     ),
                     filled: true,
-                    fillColor: Color(0xFF70BDF2), // Light blue for the input field
-                    contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+                    fillColor: Color(0xFF70BDF2),
+                    contentPadding: const EdgeInsets.symmetric(
+                        vertical: 15, horizontal: 20),
                   ),
                 ),
               ),
@@ -141,16 +143,51 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             Positioned(
+              top: 130,
+              right: 10,
+              child: FloatingActionButton(
+                onPressed: () {
+                  Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => CalculatorPage()),
+                );
+
+                },
+                child: Icon(Icons.calculate),
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.blue,
+              ),
+            ),
+            Positioned(
               top: 70,
               right: 10,
               child: FloatingActionButton(
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => PomodoroTimer()),
+                    MaterialPageRoute(
+                      builder: (context) => PomodoroTimer(
+                        onSessionComplete: _showPomodoroNotification,
+                      ),
+                    ),
                   );
                 },
                 child: Icon(Icons.timer),
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.blue,
+              ),
+            ),
+            Positioned(
+              top: 190,
+              right: 10,
+              child: FloatingActionButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ToDoPage()),
+                  );
+                },
+                child: Icon(Icons.list_alt),
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.blue,
               ),
@@ -161,6 +198,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+
   Map<String, String> customResponses = {
     "hello kader": "Jalaaaa! ontore jalaaaaa..... ki bolben bolen..",
     "how are you": "Valo nei gorte achi....",
@@ -169,6 +207,21 @@ class _HomePageState extends State<HomePage> {
     "what is the capital of bangladesh": "Noakhali, oops DHAKA",
     "what is your name": "KADERai, inspired from Crows name",
   };
+
+  void _showPomodoroNotification(bool isBreak) {
+    String messageText = isBreak
+        ? "Break time is over! Let's get back to work."
+        : "Focus session is over! Take a short break.";
+
+    ChatMessage pomodoroMessage = ChatMessage(
+      user: geminiUser,
+      createdAt: DateTime.now(),
+      text: messageText,
+    );
+    setState(() {
+      messages = [pomodoroMessage, ...messages];
+    });
+  }
 
   void _sendMessage(ChatMessage chatMessage) async {
     setState(() {
@@ -182,7 +235,8 @@ class _HomePageState extends State<HomePage> {
       Uint8List? imageBytes = await generateImage(prompt);
 
       if (imageBytes != null) {
-        String imagePath = await saveImageToFile(imageBytes); // Save image with unique name
+        String imagePath = await saveImageToFile(
+            imageBytes); // Save image with unique name
 
         ChatMessage imageMessage = ChatMessage(
           user: geminiUser,
@@ -211,11 +265,10 @@ class _HomePageState extends State<HomePage> {
         });
       }
 
-
       return;
     }
 
-    // Your existing custom response logic
+    // Check for custom responses
     for (var key in customResponses.keys) {
       if (question.contains(key)) {
         ChatMessage responseMessage = ChatMessage(
@@ -238,15 +291,25 @@ class _HomePageState extends State<HomePage> {
           File(chatMessage.medias!.first.url).readAsBytesSync(),
         ];
       }
+
+      // Create a variable to accumulate text
+      String accumulatedResponse = "";
+
+      // Stream response from Gemini API
       gemini.streamGenerateContent(question, images: images).listen((event) {
-        String response = event.content?.parts?.fold(
+        String part = event.content?.parts?.fold(
           "",
               (previous, current) => "$previous ${current.text}",
         ) ?? "";
+
+        // Accumulate parts
+        accumulatedResponse += part;
+      }).onDone(() {
+        // After streaming completes, display the full accumulated response as a single message
         ChatMessage message = ChatMessage(
           user: geminiUser,
           createdAt: DateTime.now(),
-          text: response,
+          text: accumulatedResponse,
         );
         setState(() {
           messages = [message, ...messages];
@@ -258,23 +321,57 @@ class _HomePageState extends State<HomePage> {
   }
 
 
-
-
-
-
-  void _sendMediaMessage() async {
+  void _sendMediaMessage(BuildContext context) async {
     ImagePicker picker = ImagePicker();
     XFile? file = await picker.pickImage(source: ImageSource.gallery);
+
     if (file != null) {
-      ChatMessage chatMessage = ChatMessage(
-        user: currentUser,
-        createdAt: DateTime.now(),
-        text: "Describe the picture",
-        medias: [
-          ChatMedia(url: file.path, fileName: "", type: MediaType.image),
-        ],
+      // Show a dialog to take user input for describing the image
+      TextEditingController descriptionController = TextEditingController();
+
+      // Display an input dialog for the description
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text("Describe the Picture"),
+            content: TextField(
+              controller: descriptionController,
+              decoration: InputDecoration(
+                  hintText: "Enter your description..."),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close the dialog
+                },
+                child: Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: () {
+                  // Send the message with user input
+                  ChatMessage chatMessage = ChatMessage(
+                    user: currentUser,
+                    createdAt: DateTime.now(),
+                    text: descriptionController.text.trim(),
+                    medias: [
+                      ChatMedia(
+                        url: file.path,
+                        fileName: file.name,
+                        type: MediaType.image,
+                      ),
+                    ],
+                  );
+                  _sendMessage(
+                      chatMessage); // Call the method to send the message
+                  Navigator.of(context).pop(); // Close the dialog
+                },
+                child: Text("Send"),
+              ),
+            ],
+          );
+        },
       );
-      _sendMessage(chatMessage);
     }
   }
 }
