@@ -201,7 +201,7 @@ class _HomePageState extends State<HomePage> {
 
   Map<String, String> customResponses = {
     "hello kader": "Jalaaaa! ontore jalaaaaa..... ki bolben bolen..",
-    "how are you": "Valo nei gorte achi....",
+    "how are you": "Alhamdulillah, What's about you?....",
     "who created you": "Team ByteForge from BUBT",
     "who develope you": "Team ByteForge from BUBT",
     "what is the capital of bangladesh": "Noakhali, oops DHAKA",
